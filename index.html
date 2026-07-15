@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video <=> GIF Motion Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-tr from-stone-950 via-zinc-900 to-neutral-950 text-neutral-200 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="bg-zinc-900/80 backdrop-blur-md p-8 rounded-2xl shadow-2xl max-w-lg w-full border border-orange-500/10">
+        <div class="text-center mb-8">
+            <span class="text-xs font-bold uppercase tracking-widest text-orange-400 bg-orange-400/10 px-3 py-1 rounded-full font-mono">Motion Lab</span>
+            <h1 class="text-3xl font-black tracking-tight mt-3 text-white">Video & GIF Converter</h1>
+            <p class="text-sm text-zinc-400 mt-2">Erstelle hochwertige, flüssige Web-GIFs aus deinen Videos – oder verwandle GIFs zurück in MP4s.</p>
+        </div>
+
+        <form id="converterForm" class="space-y-6">
+            <div class="group relative border-2 border-dashed border-zinc-700 hover:border-orange-500 rounded-xl p-8 transition-all text-center bg-zinc-950/40">
+                <input type="file" id="fileInput" accept="video/*,image/gif" required class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                <div id="promptText" class="space-y-2">
+                    <div class="text-4xl">🎞️</div>
+                    <p class="text-sm font-medium text-zinc-300">Datei auswählen oder hierher ziehen</p>
+                    <p class="text-xs text-zinc-500">Unterstützt Videos (MP4, WebM, MOV) & GIFs</p>
+                </div>
+                <div id="fileDisplay" class="hidden text-orange-400 font-semibold text-sm break-all"></div>
+            </div>
+
+            <div id="dropdownContainer" class="hidden space-y-2">
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400">Zielformat wählen</label>
+                <select id="targetFormat" required class="block w-full border border-zinc-700 rounded-xl p-3 bg-zinc-950 text-white shadow-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all">
+                    </select>
+            </div>
+
+            <button type="submit" id="submitBtn" disabled class="w-full bg-zinc-800 text-zinc-500 font-bold py-3 px-4 rounded-xl cursor-not-allowed transition-all duration-200">
+                Lade zuerst eine Datei hoch
+            </button>
+        </form>
+
+        <div id="status" class="mt-6 p-4 rounded-xl text-center text-sm font-medium hidden"></div>
+    </div>
+
+    <script>
+        // Ersetze diese URL mit deiner Render.com-Live-Adresse!
+        const BACKEND_URL = "https://video-gif-converter-backend.onrender.com/convert";
+
+        const fileInput = document.getElementById('fileInput');
+        const promptText = document.getElementById('promptText');
+        const fileDisplay = document.getElementById('fileDisplay');
+        const dropdownContainer = document.getElementById('dropdownContainer');
+        const targetFormat = document.getElementById('targetFormat');
+        const submitBtn = document.getElementById('submitBtn');
+        const status = document.getElementById('status');
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const ext = file.name.split('.').pop().toLowerCase();
+            
+            promptText.classList.add('hidden');
+            fileDisplay.classList.remove('hidden');
+            fileDisplay.innerText = `Datei: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`;
+
+            // Dynamische Dropdown-Inhalte basierend auf dem Dateityp
+            targetFormat.innerHTML = '';
+            
+            if (ext === 'gif') {
+                // Wenn die Quelle ein GIF ist, konvertieren wir zu Video
+                const optMp4 = document.createElement('option');
+                optMp4.value = 'mp4';
+                optMp4.innerText = 'MP4 Video (H.264, universell)';
+                const optWebm = document.createElement('option');
+                optWebm.value = 'webm';
+                optWebm.innerText = 'WebM Video (Für Webseiten)';
+                targetFormat.appendChild(optMp4);
+                targetFormat.appendChild(optWebm);
+            } else {
+                // Wenn die Quelle ein Video ist, konvertieren wir zu GIF
+                const optGif = document.createElement('option');
+                optGif.value = 'gif';
+                optGif.innerText = 'Animiertes GIF (Kompakt & Farbboptimiert)';
+                targetFormat.appendChild(optGif);
+            }
+
+            dropdownContainer.classList.remove('hidden');
+            submitBtn.disabled = false;
+            submitBtn.className = "w-full bg-orange-500 hover:bg-orange-600 text-zinc-950 font-bold py-3 px-4 rounded-xl shadow-lg shadow-orange-950/50 transition-all cursor-pointer duration-200";
+            submitBtn.innerText = "Konvertierung starten";
+            status.classList.add('hidden');
+        });
+
+        document.getElementById('converterForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            status.className = "mt-6 p-4 rounded-xl text-center text-sm font-medium bg-orange-500/10 text-orange-400 border border-orange-500/20";
+            status.innerText = "Datei wird verarbeitet... Die Farbpaletten-Optimierung kann einen Moment dauern.";
+            status.classList.remove('hidden');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50');
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('target_format', targetFormat.value);
+
+            try {
+                const response = await fetch(BACKEND_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || "Serverseitiger Verarbeitungsfehler.");
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
+                a.download = `${baseName}.${targetFormat.value}`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+
+                status.className = "mt-6 p-4 rounded-xl text-center text-sm font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                status.innerText = "Konvertierung abgeschlossen! Download läuft.";
+            } catch (err) {
+                status.className = "mt-6 p-4 rounded-xl text-center text-sm font-medium bg-red-500/10 text-red-400 border border-red-500/20";
+                status.innerText = err.message;
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50');
+            }
+        });
+    </script>
+</body>
+</html>
